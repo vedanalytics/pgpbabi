@@ -1,0 +1,104 @@
+---
+title: "Project - Cardio Good Fitness"
+output: html_notebook
+---
+Project Objective
+
+The objective of the report is to explore the cardio data set (“CardioGoodFitness”) in R
+and generate insights about the data set. This exploration report will consists of the following:
+
+Importing the dataset in R
+
+Understanding the structure of dataset
+
+Graphical exploration
+
+Descriptive statistics
+
+Insights from the dataset
+
+
+Setting the working directory
+```{r}
+setwd("/home/rstudio/pgpbabi/Project1_Cardio_Data_Exploration")
+```
+Reading the csv data into r object
+```{r}
+cg_data <- read.csv('CardioGoodFitness.csv')
+```
+cg_data dimensions
+```{r}
+dim(cg_data)
+```
+Examining the first few rows
+```{r}
+head(cg_data)
+```
+
+
+Finding class of each feature along with internal structure
+
+```{r}
+str(cg_data)
+```
+
+The Cardio Good Fitness data has 3 features Product, Gender, Marital Status as factors.
+
+
+
+Summary statistics
+```{r}
+summary(cg_data)
+```
+Inferences from the summary:
+
+1. The dataset consists of data about 3 products
+
+2. The dataset is for the agegroups of 18-50 years of bith male and female.
+
+3. There are more male observations than female
+
+4. Education seems to be a numeric value representing numberof years spent on education by cutomer
+   All the customers seems to be having at least school level. Some of them have 21 years which is    roughly equivalent to doctorate 
+
+5. Other features are self explanatory from the summary above
+
+
+Data Exploration
+
+1. Finding the fittest observations
+
+```{r}
+fittest <- cg_data[cg_data$Fitness==5,]
+fittest
+```
+
+Out of 180 observations, 30 are the fittest. Roughly, 17% of total customers are fitness savvy
+
+Let's find out the popular product among the fittest
+```{r}
+summary(fittest)
+```
+
+```{r}
+str(fittest)
+```
+
+From the above results, 
+1. Among the most fit customers, male tend to be more fitness savvy than females as there is a       clear difference of 25:6 (male:female) in numbers by gender.
+2. The most popular product among ultra fit people is TM798
+
+Examining the least fit set of observations
+```{r}
+least_fit<-cg_data[cg_data$Fitness==1,]
+least_fit
+```
+Out of 180 observations, only 2 are least fit. There is no sufficient data about the least fit people as it's difficult to analyze with just 2 rows
+
+
+Number of people by fitness levels
+```{r}
+table(cg_data$Fitness)
+```
+
+AMong all, almost half of them are moderately fit with fitness level 3.

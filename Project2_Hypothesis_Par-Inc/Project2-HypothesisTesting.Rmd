@@ -1,0 +1,110 @@
+---
+title: "Project2-HypothesisTesting"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Problem Statement
+
+Par Inc., is a major manufacturer of golf equipment. Management believes that Par’s market share could be
+increased with the introduction of a cut-resistant, longer-lasting golf ball. Therefore, the research group at Par
+has been investigating a new golf ball coating designed to resist cuts and provide a more durable ball. The
+tests with the coating have been promising.
+
+One of the researchers voiced concern about the effect of the new coating on driving distances. Par would like
+the new cut resistant ball to offer driving distances comparable to those of the current-model golf ball. To
+compare the driving distances for the two balls, 40 balls of both the new and current models were subjected to
+distance tests.
+
+The testing was performed with a mechanical hitting machine so that any difference between the mean
+distances for the two models could be attributed to a difference in the design. The results of the tests, with
+distances measured to the nearest yard, are contained in the data set “Golf”.
+
+```{r cars}
+# Loading the library and read the csv
+
+Par_Inc <- read.csv('Par-Inc.csv')
+```
+
+## Summary of the data
+```{r}
+summary(Par_Inc)
+```
+```{r}
+# Attaching the dataset for easy accessing of variables
+attach(Par_Inc)
+```
+
+## Plotting old and New distributions
+
+For understanding the spread of the data points, it's always intuitive to plot
+
+### Distribution of current observations
+```{r}
+hist(Current)
+boxplot(Current)
+hist(New)
+boxplot(New)
+```
+
+## Observations from plots 
+
+1. Looking at the plots, both Current and new observations seem to be normally distributed. And      also, both of them are skewed in similar manner.
+
+2. The spread of both distributions are almost same.
+
+3. The median looks little different in both.
+
+## Setting up Hypothesis
+
+1. The level of significance (Alpha ) = 0.05.
+2. The sample size , N = 40 which is sufficiently large for a Zstat Test.
+3. But since the population standard deviation (Sigma) is unknown, we have
+   to use a Tstat test.
+4. Degree of Freedom: Since the sample is the same for both Sampling tests,
+   we have N-1 degrees of freedom : 39
+5. As the hypothesis is that the new ball would different in distances to the old ball, we would prefer a Two tailed T test
+
+## Formulation of Hypothesis
+1. As we want to prove the hypothesis of distances not being equal
+   Ha  --> mu1< >mu2
+2. H0 = mu1 = mu2
+
+```{r}
+# 95% confidence interval for Current distances
+muCurrent <- mean(Current)
+sdCurrent <- sd(Current)
+n <- 40 # Number of observations
+errorCurrent <- qt(0.975,df=n-1)*sdCurrent/sqrt(n)
+cat('Confidence Interval for Current is ', muCurrent-errorCurrent, ' - ', muCurrent+errorCurrent)
+
+# 95% confidence interval for Current distances
+muNew <- mean(New)
+sdNew <- sd(New)
+errorNew <- qt(0.975,df=n-1)*sdNew/sqrt(n)
+cat('Confidence Interval for New is ', muNew-errorNew, ' - ', muNew+errorNew)
+```
+
+
+
+
+```{r}
+# Running t test
+t.test(Current, New, paired = TRUE, conf.level = 0.95, alternative = "two.sided")
+```
+
+
+## Inference
+
+Confidence Interval of difference between means is -1.620636 to 7.170536
+
+The test statistic is within the range of confidence interval 
+From nthe test results, the p-value = 0.2092 which is very much greater than the significance level
+
+Hence the null hypothesis can't be rejected.
+
+So, it can be concluded that the distances of both Current and the New balls are similar
