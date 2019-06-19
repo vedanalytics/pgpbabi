@@ -1,0 +1,415 @@
+---
+title: "Bank_Personal_Loan"
+author: "Narayan Tyagi"
+date: "May 13, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## Bank_Personal_Loan_Modelling
+
+This case is about a bank (Thera Bank) which has a growing customer base. Majority of these customers are liability customers (depositors) with varying size of deposits. The number of customers who are also borrowers (asset customers) is quite small, and the bank is interested in expanding this base rapidly to bring in more loan business and in the process, earn more through the interest on loans. In particular, the management wants to explore ways of converting its liability customers to personal loan customers (while retaining them as depositors). A campaign that the bank ran last year for liability customers showed a healthy conversion rate of over 9% success. This has encouraged the retail marketing department to devise campaigns with better target marketing to increase the success ratio with minimal budget. The department wants to build a model that will help them identify the potential customers who have higher probability of purchasing the loan. This will increase the success ratio while at the same time reduce the cost of the campaign. The file Bank.xls contains data on 5000 customers. The data include customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign.
+
+```{r}
+ data<-read.csv("Bank_Personal_Loan_Modelling.csv")
+
+
+# Data Exploration
+summary(data) # Column ID is nominal data. This could be removed
+```
+
+# Observation
+  1.Column ID is nominal data. This could be removed
+  2.Experience..in.years. is having negative experience. This need to be fix.
+
+## Make proper names
+
+Some column names are long. Make them Short.
+
+```{r}
+names(data)[names(data)=="Age..in.years."] <- "Age"
+names(data)[names(data)=="Experience..in.years."] <- "Experience"
+names(data)[names(data)=="Income..in.K.month."] <- "Income"
+
+str(data)
+
+```
+
+Note:- data types like Personal.Loan, Family.members , Education, are integer. Lets convert them into factor.
+
+```{r}
+data$Family.members <- as.factor(data$Family.members)
+data$Personal.Loan <- as.factor(data$Personal.Loan)
+data$Education <- as.factor(data$Education)
+data$Securities.Account <- as.factor(data$Securities.Account)
+data$CD.Account <- as.factor(data$CD.Account)
+data$Online <- as.factor(data$Online)
+data$CreditCard <- as.factor(data$CreditCard)
+
+```
+
+```{r}
+str(data)
+dim(data)
+names(data)
+```
+Remove column ID and check for missing values
+
+
+```{r}
+data = subset(data, select = c(-ID))
+any(is.na(data)) 
+```
+There are missing vlaues present . Lets remove them.
+Also remove rows which have negative experience values.
+
+```{r}
+data <- na.omit(data)
+
+library(dplyr)
+data <- filter(data, Experience >=0)
+# Lets check summary again
+summary(data)
+```
+
+Check for Zero variance/Near Zero variance
+
+
+```{r}
+library(caret)
+nsv <- nearZeroVar(data, saveMetrics=TRUE)
+nsv <-cbind("ColNo"=1:ncol(data),nsv)
+nsv # this shows NO near zero or zero varaiance
+
+```
+
+# Observation
+No Zero varaince and near zero varaiance column present.
+
+Check % of Personal Loan
+
+```{r}
+length(which(data$Personal.Loan=="1"))/nrow(data) # Personal.Loan rate = 9.7% 
+```
+Personal.Loan rate = 9.7% 
+```{r}
+# Data Visulization
+attach(data)
+library(ggplot2)
+
+# For continuous variables
+
+ggplot(data, aes(x = Age)) + 
+  geom_density(aes(fill = Personal.Loan), alpha = 0.3) + 
+  scale_color_manual(values = c("#868686FF", "#EFC000FF")) + 
+  scale_fill_manual(values = c("darkturquoise", "lightcoral")) + xlim(10,80)
+# Customers of age range 30-35 years have positive response to campaign
+
+
+ggplot(data, aes(x = Experience)) + 
+  geom_density(aes(fill = Personal.Loan), alpha = 0.3) + 
+  scale_color_manual(values = c("#868686FF", "#EFC000FF")) + 
+  scale_fill_manual(values = c("darkturquoise", "lightcoral")) + xlim(-10,50)
+# Customers with 5-10 years of experience have more acceptance of loans
+
+
+ggplot(data, aes(x = Income)) + 
+  geom_density(aes(fill = Personal.Loan), alpha = 0.3) + 
+  scale_color_manual(values = c("#868686FF", "#EFC000FF")) + 
+  scale_fill_manual(values = c("darkturquoise", "lightcoral")) + xlim(-20,250)
+# Very important feature
+# People of income between $125k and $200k have more Personal.Loan
+
+
+ggplot(data, aes(x = Mortgage)) + 
+  geom_density(aes(fill = Personal.Loan), alpha = 0.3) + 
+  scale_color_manual(values = c("#868686FF", "#EFC000FF")) + 
+  scale_fill_manual(values = c("darkturquoise", "lightcoral")) + xlim(-20,650)
+# Customers with no house mortgage tend to take personal loan
+
+
+ggplot(data, aes(x = CCAvg)) + 
+  geom_density(aes(fill = Personal.Loan), alpha = 0.3) + 
+  scale_color_manual(values = c("#868686FF", "#EFC000FF")) + 
+  scale_fill_manual(values = c("darkturquoise", "lightcoral")) + xlim(-2,12)
+# Average spending on credit cards appears to be signficant variable
+# People of CCAvg ~3.5 have more Personal.Loan
+
+# For categorical features
+
+ggplot(data, aes(x = Family.members, fill = Personal.Loan)) + 
+  geom_bar(width = 0.25, alpha=0.5) + 
+  scale_fill_manual(values = c('darkturquoise', 'lightcoral'))
+
+prop.table(table(Family.members,Personal.Loan),1)*100
+# High percentage of Personal.Loan customers have Family.members 3 or 4
+
+
+ggplot(data, aes(x = CD.Account, fill = Personal.Loan)) + 
+  geom_bar(width = 0.25, alpha=0.5) + 
+  scale_fill_manual(values = c('darkturquoise', 'lightcoral'))
+
+prop.table(table(CD.Account,Personal.Loan),1)*100
+# Customers having certificate of deposit account react positively towards campaign
+
+
+ggplot(data, aes(x = Education, fill = Personal.Loan)) + 
+  geom_bar(width = 0.25, alpha=0.5) + 
+  scale_fill_manual(values = c('darkturquoise', 'lightcoral'))
+
+prop.table(table(Education,Personal.Loan),1)*100
+# Surprisingly, the customers with undergraduate degrees responded the least to the marketing campaign, as compared to the customers with advanced degrees.
+
+
+ggplot(data, aes(x = CreditCard, fill = Personal.Loan)) + 
+  geom_bar(width = 0.25, alpha=0.5) + 
+  scale_fill_manual(values = c('darkturquoise', 'lightcoral'))
+
+prop.table(table(CreditCard,Personal.Loan),1)*100
+# Possession of credit card by customers doesn't influence on campaign's success
+
+
+ggplot(data, aes(x = Online, fill = Personal.Loan)) + 
+  geom_bar(width = 0.25, alpha=0.5) + 
+  scale_fill_manual(values = c('darkturquoise', 'lightcoral'))
+
+prop.table(table(Online,Personal.Loan),1)*100
+# Customers' online banking activities doesn't influence on campaign's success
+
+
+ggplot(data, aes(x = Securities.Account, fill = Personal.Loan)) + 
+  geom_bar(width = 0.25, alpha=0.5) + 
+  scale_fill_manual(values = c('darkturquoise', 'lightcoral'))
+
+prop.table(table(Securities.Account,Personal.Loan),1)*100
+# Having securities accounts have affected the customers decision to take the loan offered in the last campaign
+
+
+
+#Creat Development and Validation Sample
+
+```{r}
+set.seed(1234)
+library(caTools)
+sample = sample.split(data,SplitRatio = 0.7)
+bankloan.dev = subset(data,sample == TRUE)
+bankloan.val = subset(data,sample == FALSE)
+nrow(bankloan.dev)
+nrow(bankloan.val)
+
+#SHOWS ROWCOUNT FOR DEV AND VALIDATION SAMPLE
+c(nrow(bankloan.dev), nrow(bankloan.val))  
+length(which(bankloan.dev$Personal.Loan=="1"))/nrow(bankloan.dev)
+length(which(bankloan.val$Personal.Loan=="1"))/nrow(bankloan.val)
+```
+
+Lets build CART Model
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+bankloanParameters = rpart.control(minsplit=50, minbucket = 15, cp = 0, xval = 10)
+bankloanModel <- rpart(formula = Personal.Loan ~ ., data = bankloan.dev, method = "class", control = bankloanParameters)
+bankloanModel
+```
+
+```{r}
+library(rattle)
+library(RColorBrewer)
+fancyRpartPlot(bankloanModel)
+printcp(bankloanModel)
+plotcp(bankloanModel)
+```
+
+
+prune tree
+```{r}
+bestcp <- bankloanModel$cptable[which.min(bankloanModel$cptable[,"xerror"]), "CP"]
+ptree<- prune(bankloanModel, cp= bestcp ,"CP")
+
+printcp(ptree)
+fancyRpartPlot(ptree, uniform=TRUE,  main="Pruned Classification Tree")
+ptree
+```
+We have total 340 Personal Loan = 1, out of them we got 236(259-23) in node 7 which have (259/3414) = 7.5 % of origin customers base. In this node bank can get sucess rate (236/340) 69% of total resonder. SO by just contacting 7.5 % of customers bank can get 69% of resonse which is 6.9 times higher than origion response rate.
+
+In case if bank contact node 7 and node 13 customers which is 259 + 60 = 319. So by doing so bank will target 319/3414 = 9.3% of total customers but thet can get resonse rate of (236+55)/340 = 85.5 %  which is 8.5 times higher than origion response rate.
+
+Tree path for node 7 and 13
+
+```{r}
+tree.path <- path.rpart(ptree , node = c(7,13))
+```
+
+
+Predict Using bankloanModel
+
+```{r}
+bankloan.dev$predict.class <- predict(ptree, bankloan.dev, type="class")
+bankloan.dev$predict.score <- predict(ptree, bankloan.dev)
+```
+
+# Model perfromance mesurement(on devlopment sample)
+
+Deciling 
+
+```{r}
+decile <- function(x){
+  deciles <- vector(length=10)
+  for (i in seq(0.1,1,.1)){
+    deciles[i*10] <- quantile(x, i, na.rm=T)
+  }
+  return (
+    ifelse(x<deciles[1], 1,
+    ifelse(x<deciles[2], 2,
+    ifelse(x<deciles[3], 3,
+    ifelse(x<deciles[4], 4,
+    ifelse(x<deciles[5], 5,
+    ifelse(x<deciles[6], 6,
+    ifelse(x<deciles[7], 7,
+    ifelse(x<deciles[8], 8,
+    ifelse(x<deciles[9], 9, 10
+    ))))))))))
+};
+
+
+## deciling
+bankloan.dev$deciles <- decile(bankloan.dev$predict.score[,2])
+```
+
+Rank ordering
+```{r}
+## Ranking code
+library(data.table)
+tmp_DT = data.table(bankloan.dev)
+rank <- tmp_DT[, list(
+  cnt = length(Personal.Loan), 
+  cnt_resp = length(which(Personal.Loan == '1')), 
+  cnt_non_resp = length(which(Personal.Loan == '0'))) ,  
+  by=deciles][order(-deciles)];
+
+rank$rrate <- round(rank$cnt_resp * 100 / rank$cnt,2);
+rank$cum_resp <- cumsum(rank$cnt_resp)
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp)
+rank$cum_perct_resp <- round(rank$cum_resp * 100 / sum(rank$cnt_resp),2);
+rank$cum_perct_non_resp <- round(rank$cum_non_resp * 100 / sum(rank$cnt_non_resp),2);
+rank$ks <- abs(rank$cum_perct_resp - rank$cum_perct_non_resp)
+```
+
+ROC, AUC, Gini and Confusion Martrix
+```{r}
+library(ROCR)
+pred.dev <- prediction(bankloan.dev$predict.score[,2], bankloan.dev$Personal.Loan)
+perf.dev <- performance(pred.dev, "tpr", "fpr")
+plot(perf.dev)
+
+KS.dev <- max(attr(perf.dev, 'y.values')[[1]]-attr(perf.dev, 'x.values')[[1]])
+
+auc.dev <- performance(pred.dev,"auc"); 
+auc.dev <- as.numeric(auc.dev@y.values)
+
+library(ineq)
+gini.dev = ineq(bankloan.dev$predict.score[,2], type="Gini")
+
+auc.dev
+KS.dev
+gini.dev
+
+confM.dev <-confusionMatrix(bankloan.dev$predict.class, bankloan.dev$Personal.Loan, positive = '1')
+confM.dev
+```
+
+# Check Model Performance of Validation sample
+
+prediction on validation sample
+
+```{r}
+bankloan.val$predict.class <- predict(ptree, bankloan.val, type="class")
+bankloan.val$predict.score <- predict(ptree, bankloan.val)
+```
+
+
+Decling and rank ordering
+```{r}
+bankloan.val$deciles <- decile(bankloan.val$predict.score[,2])
+
+
+
+tmp_DT.val = data.table(bankloan.val)
+rank.val <- tmp_DT[, list(
+  cnt = length(Personal.Loan), 
+  cnt_resp = length(which(Personal.Loan == "1")), 
+  cnt_non_resp = length(which(Personal.Loan == "0"))) ,
+  by=deciles][order(-deciles)];
+rank.val$rrate <- round(rank.val$cnt_resp * 100 / rank.val$cnt,2);
+rank.val$cum_resp <- cumsum(rank.val$cnt_resp)
+rank.val$cum_non_resp <- cumsum(rank.val$cnt_non_resp)
+rank.val$cum_perct_resp <- round(rank.val$cum_resp * 100 / sum(rank.val$cnt_resp),2);
+rank.val$cum_perct_non_resp <- round(rank.val$cum_non_resp * 100 / sum(rank.val$cnt_non_resp),2);
+rank.val$ks <- abs(rank.val$cum_perct_resp - rank.val$cum_perct_non_resp);
+View(rank.val)
+```
+
+
+```{r}
+pred.val <- prediction(bankloan.val$predict.score[,2], bankloan.val$Personal.Loan)
+perf.val <- performance(pred.val, "tpr", "fpr")
+plot(perf.val)
+KS.val <- max(attr(perf.val, 'y.values')[[1]]-attr(perf.val, 'x.values')[[1]])
+auc.val <- performance(pred.val,"auc"); 
+auc.val <- as.numeric(auc.val@y.values)
+
+gini.val = ineq(bankloan.val$predict.score[,2], type="Gini")
+
+
+auc.val
+KS.val
+gini.val
+
+confM.val <-confusionMatrix(bankloan.val$predict.class, bankloan.val$Personal.Loan, positive = '1')
+confM.val
+
+```
+
+# Verify if there any overfitting 
+
+Devlopemt Sample Model performance measurement =
+
+AUC(Area Under the curve) = 98.5%
+KS = 92.7%
+Gini Cofficient = 87.8%
+Accuracy = 98%
+Sensitivity = 89 %         
+Specificity = 99 %
+
+Validation sample Model performance measurement =
+
+AUC(Area Under the curve) = 97.63%
+KS = 93.9%
+Gini Cofficient = 87.5%
+Accuracy = 97.63%
+Sensitivity = 88.4 %         
+Specificity = 985 %
+
+There is very less deviation in the model performance measurements , hence Model is not overfit.
+
+# Conclusion-
+Bank wants to identify the potential customers who have higher probability of purchasing the loan so that their success rate is higher and cost of campaign is reduced.
+
+If bank target customers who have monthly income more then 110.5k and have Education level Graduate or Advanced/Professional, bank can get 69% of customer who will accept the personal loan offer in the campaign, which is approximaltly 7 times higher then original success rate. If Bank will do so, they will just do campaigning for 7.5% of origin customers. 
+
+
+In addition to above such customer if bank also target customers who have monthly income more then 110.5k with Education level as Undergraduate and have 3 to 4 menmbers in there family, bank can get 86% of customer who will accept the personal loan offer in the campaign, which is approximaltly 9 times higher then original success rate. If Bank will do so, they will just do campaigning for 9.3% of origin customers. 
+
+So if bank use this model, bank will just target 9% of origin cusotomer base but still they can get sucess rate of 86% which is more then 9 times of origin sucess rate. Hence if bank uses above model, thet will save the 91% cost of campaigning but still tey can manage to get 86% of total responder which is just 14% less of total polutauion.
+
+
+
+
+
+
+

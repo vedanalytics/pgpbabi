@@ -1,0 +1,186 @@
+---
+title: "Predicting Customer Satisfaction"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Project scope
+
+This project is about doing factor analysis and running regression model to predict customer satisfaction based on the market segment dataset.
+
+The outline of the study includes
+
+1. Reading the dataset and checking for any data quality issues
+2. Do some variable analysis
+3. Build the regression model (Without worrying about correlations)
+4. Interpret the model
+4. Check for correlations
+5. Do factor analysis if needed and extract factors
+6. Run the regression on the factor dataset
+7. Compare the naive model to the model with factors
+
+
+```{r}
+# Reading the csv file 'Factor-Hair-Revised.csv'
+
+factor_hair_raw <- read.csv('Factor-Hair-Revised.csv')
+print(head(factor_hair_raw))
+```
+
+```{r}
+# Removing the id column
+factor_hair_raw <- factor_hair_raw[,c(2:13)]
+print(head(factor_hair_raw))
+```
+
+Upon observing the data type from above table, all the variables seem to be continuous. So, no dummy coding is required for this analysis
+
+```{r}
+# Looking at the summary statistics
+summary(factor_hair_raw)
+```
+```{r}
+# As the independent variable for the analysis is Satisfaction, creating a separate dataframe for the dependent variables. This is useful for easily doing feature scaling and centering. Helps in improving the data quality
+dependent_raw <- factor_hair_raw[,c(1:11)]
+# Even though most of the fatures seem to be on a similar scale, some of the features has max value 5.7 and some of them has 9.9. This is almost 40% different. So doing feature scaling helps in ignoring the units of measurements of each feature and helps in better model interpretation.
+dependent_scaled <- data.frame(lapply(dependent_raw, function(x) scale(x, center = FALSE, scale = max(x, na.rm = FALSE)/10)))
+summary(dependent_scaled)
+```
+
+
+
+```{r pressure, echo=FALSE}
+library(tidyr)
+library(ggplot2)
+# Looking at the frequency distribution of all the columns
+ggplot(gather(dependent_scaled), aes(value)) + 
+    geom_histogram(bins = 10) + 
+    facet_wrap(~key, scales = 'free_x')
+```
+```{r}
+# Adding the independent column back to the scaled dataframe
+factor_hair_scaled <- dependent_scaled
+factor_hair_scaled[,c(12)] <-factor_hair_raw[,c(12)]
+names(factor_hair_scaled)[12]<-'Satisfaction'
+print(head(factor_hair_scaled))
+```
+
+```{r}
+# RUnning the regression model for every column
+lm_func <- function(y) {
+  model <- lm(Satisfaction ~ y, data = factor_hair_scaled)
+  summary(model)
+}
+lapply(factor_hair_scaled[,1:11], lm_func)
+```
+By Analyzing the above results, it is evident the residual sum of squares of all models doesn't exceed 0.3. Which can be interpreted that no individual variable explains the independent variable more than 30%
+
+
+```{r}
+attach(factor_hair_scaled)
+# Building a modelby combining all the features
+# Checking the naive model without verifying the correlation of the dependent variables.
+naive_model <- lm(Satisfaction~.,factor_hair_scaled)
+summary(naive_model)
+```
+When combining all the columns, r2 value is improved by huge margin.
+Only 3 columns 'ProdQual', 'Ecom', 'SalesFImage' are contributing to the predictive power of the independent variable. 
+
+There could be two reasons for it.
+
+1. The other features are realy not predictive enough
+2. There can be a great amount of multicollinearity, which is affecting the columns.
+
+However, the above naive model didn't validate the basic assumption of multi collinearity linear regression. 
+```{r}
+# Checking if there is any correlation between the variables. 
+library(reshape2)
+factor_hair_cor <- cor(factor_hair_scaled)
+melted_cor <- melt(factor_hair_cor)
+```
+```{r}
+# Plotting the hearmap of the correlations
+library(ggplot2)
+ggplot(data = melted_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) 
+```
+On careful observation of the heatmap, there are patterns of strong correlation between few variables.
+1. Ecom, SalesFImage
+2. TechSup, WartyClaim
+3. CompRes, DelSpeed
+4. CompRes, OrdBilling
+
+As there are multiple variables which has high correlation, the underlying assumption of all uncorrelated variables is void. Hence, linear regression cannot be done with the given variables in their current form. 
+This leads to explore the possibility of PCA and factor analysis.
+
+```{r}
+# Checking the possibility of dimenionality reduction
+
+library(psych)
+dependent_corr <- cor(dependent_scaled)
+print(cortest.bartlett(dependent_corr,nrow(dependent_scaled)))
+```
+The p-value of the test is within the significant limit (assuming aplha=0.5)
+There is a possibility of PCA and dimension reduction
+```{r}
+# Finding out eigen values and eigen vectors
+dep_eigen <- eigen(dependent_corr)
+dep_eigen_val <- dep_eigen$values
+dep_eigen_vectors <- dep_eigen$vectors
+
+print(dep_eigen_val)
+```
+
+The requirement of the project is to consider 4 principal components. Selecting eigen values greater than 1 will select 4 from the above list
+```{r}
+# Loadings and communality
+pc <- principal(r=dependent_scaled, nfactors = 4, rotate = 'varimax')
+pc
+```
+
+By carefully observing the above factors
+RC1 has high values for CompRes, OrdBilling, DelSpeed. All of them are related to ease of using and customer service. Hence, it is safe to name this as 'ServiceQuality'
+RC2 has high values of Ecom and SalesFImage and Advertising. This component can be named as 'Marketing'
+RC3 has highest values for TechSup, WartyClaim. This component explains the importance of after sales support. Naming this as 'CustomerSupport'
+RC4 has high values for ProdQual and also negative relation to CompPricing. So, it is evident that this component has importance to Quality and least importance to pricing. It si safe to name is 'ProductQuality' 
+
+To summarize 
+RC1 - ServiceQuality
+RC2 - Marketing
+RC3 - CustomerSupport
+RC4 - ProductQuality
+
+Next step is to perform linear regresssion onm the components
+```{r}
+# Before performing the linear regression, combining Principal component scores and the independent variable to a dataframe
+pca_factor_hair <- data.frame(pc$scores)
+colnames(pca_factor_hair) <- c('ServiceQuality','Marketing','CustomerSupport','ProductQuality')
+pca_factor_hair
+```
+```{r}
+pca_factor_hair[,c(5)] <- factor_hair_raw[,c(12)]
+names(pca_factor_hair)[5]<-'Satisfaction'
+pca_factor_hair
+```
+
+Performing linear regression
+```{r}
+final_model <- lm(Satisfaction~.,pca_factor_hair)
+summary(final_model)
+
+```
+##Final Model Interpretation
+
+The final model has 3 variables contributing to the prediction. CustomerSupport is not contributing to the model
+r2 is 0.66 and adj r2 is 0.6462 means the components are helping 64.6% of the independent variable.
+
+Even though the final model r2 is much lesser than the naive model before pca, as the variables are much less correlated to each other, the final model is more powerful than the naive model before pca.
+
+tuning some of the hyperparameters and minimizing errors and using some of the optimization algorithms helps in improving the model accuracy. But not performing all of them as they are out of this mini project's scope.

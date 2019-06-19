@@ -1,0 +1,261 @@
+---
+title: "Personal Loan Campaign"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem Statement
+
+Business Scenario
+• The data provided is from a Personal Loans Campaign
+executed by MyBank.
+• 20000 customers were targeted with an offer of Personal
+Loans at 10% interest rate.
+• 2512 customers out of 20000 responded expressing their
+need for Personal Loan; These customers are labelled as
+Target = 1 and remaining customers are labelled as Target =
+0
+
+The motive of thi sproject is to build a machine learning model to predict the target variable
+```{r}
+#Importing the dataset
+raw_data <- read.csv('Personal Loan Campaign-dataset.csv', header = TRUE)
+print(head(raw_data))
+```
+```{r}
+# Looking at the summary dataset on a high level
+summary(raw_data)
+```
+
+The dataset looks clean without any missing values.
+
+##Exploring the data
+
+```{r}
+require('DataExplorer')
+```
+
+```{r}
+# Removing cust_id column as it seems not important because it is just an incremented value
+raw_data <- subset(raw_data, select = c(-CUST_ID))
+raw_data$TARGET <- as.factor(raw_data$TARGET)
+```
+```{r}
+str(raw_data)
+```
+
+Most of the columns are integer or number. There are few factor columns
+
+Among all the factor columns,ACC_OP_DATE is a date column. Dates seem to be different formats and noisy. Ignoring the date column for now and see the model outputs. 
+
+Ignoring ACC_OP_DATE as it represents account opening date doesn't quantify the relationship of customer with the bank. Instead, another column LEN_OF_RLTN_IN_MNT, which represents length of relationship of customer with the bank looks like more quantifiable and interpretable variable . 
+
+Hence dropping the ACC_OP_DATE for now.
+
+```{r}
+# Library for easy handling of dates
+raw_data <- subset(raw_data, select = c(-ACC_OP_DATE))
+raw_data <- subset(raw_data, select = c(-random))
+```
+
+
+
+
+```{r}
+library(DataExplorer)
+create_report(raw_data)
+```
+
+
+
+
+Check for zero and non zero variance
+
+```{r}
+library(caret)
+nzv <- nearZeroVar(raw_data, saveMetrics=TRUE)
+nzv <-cbind(row_name = rownames(nzv),nzv)
+print(nzv) # this shows NO near zero or zero varaiance
+```
+```{r}
+#Finding correlations
+raw_data.numeric<-subset(raw_data,select=-c(TARGET,GENDER,OCCUPATION,AGE_BKT,ACC_TYPE))
+cor_columns <- findCorrelation(cor(raw_data.numeric), cutoff = 0.5,exact=TRUE, names=TRUE)
+cor_columns
+```
+
+
+```{r}
+#Removing Near zero variance columns
+raw_data <- subset(raw_data, select=-c(AMT_OTH_BK_ATM_USG_CHGS,AMT_MIN_BAL_NMC_CHGS,NO_OF_IW_CHQ_BNC_TXNS,NO_OF_OW_CHQ_BNC_TXNS,AVG_AMT_PER_ATM_TXN))
+```
+
+```{r}
+#Removing the correlated columns
+raw_data.uncorrelated <- subset(raw_data, select=-c(NO_OF_L_DR_TXNS,NO_OF_NET_DR_TXNS,TOT_NO_OF_L_TXNS,AMT_L_DR,NO_OF_ATM_DR_TXNS,AMT_ATM_DR,AMT_MOB_DR,AVG_AMT_PER_CHQ_TXN,NO_OF_CHQ_DR_TXNS,AMT_NET_DR,AMT_BR_CSH_WDL_DR))
+```
+
+```{r}
+# Embedding the report file from above step
+htmltools::includeHTML("report.html")
+```
+
+#Creat Development and Validation Sample
+
+```{r}
+set.seed(12)
+library(caTools)
+sample = sample.split(raw_data,SplitRatio = 0.7)
+model.dev <- subset(raw_data,sample == TRUE)
+model.val <- subset(raw_data,sample == FALSE)
+model.uncor.dev <- subset(raw_data.uncorrelated,sample == TRUE)
+model.uncor.val <- subset(raw_data.uncorrelated,sample == FALSE)
+```
+```{r}
+#The dataset looks highly imbalance. For building proper model, trying to balance the dataset using SMOTE
+
+```
+```{r}
+library(DMwR)
+```
+
+```{r}
+smote.dev <- SMOTE(TARGET~., data=model.dev)
+smote.uncor.dev <- SMOTE(TARGET~., data=model.uncor.dev)
+```
+
+## Build CART model
+```{r}
+loan.dev <- smote.uncor.dev
+loan.val<- model.uncor.val
+```
+
+```{r}
+library(rpart)
+library(rpart.plot)
+loanParams = rpart.control(minsplit=10, minbucket = 5, cp = 0, xval = 20, maxdepth = 10
+                           )
+loanModel <- rpart(formula = TARGET ~ ., data = loan.dev, method = "class", control = loanParams)
+loanModel
+```
+```{r}
+library(rattle)
+library(RColorBrewer)
+fancyRpartPlot(loanModel)
+printcp(loanModel)
+plotcp(loanModel)
+```
+```{r}
+bestcp <- loanModel$cptable[which.min(loanModel$cptable[,"xerror"]), "CP"]
+ptree<- prune(loanModel, cp= bestcp ,"CP")
+
+printcp(ptree)
+fancyRpartPlot(ptree, uniform=TRUE,  main="Pruned Classification Tree")
+ptree
+```
+```{r}
+loan.dev$predict.class <- predict(ptree, loan.dev, type="class")
+loan.dev$predict.score <- predict(ptree, loan.dev)
+```
+```{r}
+library(ROCR)
+pred.dev <- prediction(loan.dev$predict.score[,2], loan.dev$TARGET)
+perf.dev <- performance(pred.dev, "tpr", "fpr")
+plot(perf.dev)
+
+KS.dev <- max(attr(perf.dev, 'y.values')[[1]]-attr(perf.dev, 'x.values')[[1]])
+
+auc.dev <- performance(pred.dev,"auc"); 
+auc.dev <- as.numeric(auc.dev@y.values)
+
+library(ineq)
+gini.dev = ineq(loan.dev$predict.score[,2], type="Gini")
+
+auc.dev
+KS.dev
+gini.dev
+
+```
+
+
+```{r}
+```
+
+# Check Model Performance of Validation sample
+
+prediction on validation sample
+
+```{r}
+loan.val$predict.class <- predict(ptree, loan.val, type="class")
+loan.val$predict.score <- predict(ptree, loan.val)
+```
+
+```{r}
+pred.val <- prediction(loan.val$predict.score[,2], loan.val$TARGET)
+perf.val <- performance(pred.val, "tpr", "fpr")
+plot(perf.val)
+KS.val <- max(attr(perf.val, 'y.values')[[1]]-attr(perf.val, 'x.values')[[1]])
+auc.val <- performance(pred.val,"auc"); 
+auc.val <- as.numeric(auc.val@y.values)
+
+gini.val = ineq(loan.val$predict.score[,2], type="Gini")
+
+
+auc.val
+KS.val
+gini.val
+
+```
+
+##Random Forest
+
+```{r}
+library(randomForest)
+
+```
+
+```{r}
+#Split Data
+
+rndF.dev <- smote.uncor.dev
+rndF.val <- model.uncor.val
+```
+
+```{r}
+str(rndF.dev)
+```
+```{r}
+xtest<-subset(rndF.val,select=c(-TARGET))
+ytest<-rndF.val[,1]
+```
+
+```{r}
+rndFor = randomForest(TARGET ~ ., data = rndF.dev, 
+                   ntree=100, nodesize = 5,
+                   importance=TRUE, classwt=c(1,100), strata=0.1, xtest=xtest, ytest=ytest)
+
+print(rndFor)
+```
+```{r}
+rndFor$err.rate
+plot(rndFor, main="")
+legend("topright", c("OOB", "0", "1"), text.col=1:6, lty=1:3, col=1:3)
+title(main="Error Rates Random Forest rndF.dev")
+```
+
+```{r}
+tRndFor = tuneRF(x = rndF.dev, 
+              y=rndF.dev$TARGET,
+             
+)
+importance(tRndFor)
+```
+```{r}
+```
+
+```{r}
+```
+
